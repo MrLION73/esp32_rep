@@ -2,6 +2,7 @@
 #include <PubSubClient.h>
 #include <Adafruit_BME680.h>
 #include "secrets.h"
+#include <Wire.h>
 
 Adafruit_BME680 bme;  // capteur BME680
 
@@ -40,49 +41,27 @@ void reconnectMQTT() {
   }
 }
 
+
 void setup() {
   Serial.begin(115200);
 
-  setupWifi();
-  client.setServer(MQTT_SERVER, 1883);
+  // I2C sur les pins ESP32
+  Wire.begin(21, 22);
 
-  // --- Init BME680 ---
-  if (!bme.begin()) {
-    Serial.println("❌ BME680 introuvable !");
-    while (1) delay(100);
-  }
-
-  bme.setTemperatureOversampling(BME680_OS_8X);
-  bme.setHumidityOversampling(BME680_OS_2X);
-  bme.setPressureOversampling(BME680_OS_4X);
-  bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
-  bme.setGasHeater(320, 150);
-}
-
-void loop() {
-  if (!client.connected()) reconnectMQTT();
-  client.loop();
-
-  if (!bme.performReading()) {
-    Serial.println("Erreur lecture BME680");
-    return;
-  }
-
-  float temperature = bme.temperature;
-  float humidity    = bme.humidity;
-  float pressure    = bme.pressure / 100.0;
-  float iaq         = bme.gas_resistance / 1000.0;
-
-  // 🔥 Ici, on construit le JSON à la main
-  char payload[200];
-  snprintf(payload, sizeof(payload),
-           "{\"temperature\":%.2f,\"humidity\":%.2f,\"pressure\":%.2f,\"iaq\":%.2f}",
-           temperature, humidity, pressure, iaq);
-
-  client.publish("sensor/env", payload);
-
-  Serial.print("Envoyé MQTT : ");
-  Serial.println(payload);
-
+  Serial.println("Scan I2C...");
   delay(2000);
+
+  for (byte address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    byte error = Wire.endTransmission();
+
+    if (error == 0) {
+      Serial.print("I2C device found at 0x");
+      Serial.println(address, HEX);
+    }
+  }
+
+  Serial.println("Scan terminé.");
 }
+
+void loop() {}
